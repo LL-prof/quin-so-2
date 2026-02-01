@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ejercicio</title>
+
+    <style>
+      :root {
+        --bg: #f5f5f5;
+        --white: #ffffff;
+        --black: #1f1f1f;
+        --accent: #4aa3ff;
+        --shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+
+        --sel: #facc15;
+        --ok: #22c55e;
+        --bad: #ef4444;
+        --muted: #6b7280;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 22px 16px;
+        background: var(--bg);
+        font-family: Arial, sans-serif;
+      }
+
+      .card {
+        width: min(920px, 100%);
+        background: rgba(255, 255, 255, 0.72);
+        border-radius: 22px;
+        padding: 16px 18px 18px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(6px);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .title {
+        font-size: 20px;
+        font-weight: 900;
+        margin: 0;
+        color: #111827;
+      }
+
+      .score {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 16px;
+        background: #fff;
+        box-shadow: var(--shadow);
+        font-weight: 900;
+      }
+
+      .score small { color: var(--muted); }
+
+      .choices {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(70px, 90px));
+        gap: 16px 20px;
+        justify-content: center;
+      }
+
+      .note-group {
+        display: grid;
+        gap: 10px;
+        justify-items: center;
+      }
+
+      button.note {
+        width: 82px;
+        height: 62px;
+        border-radius: 18px;
+        border: none;
+        cursor: pointer;
+        box-shadow: var(--shadow);
+        position: relative;
+      }
+
+      .white { background: var(--white); }
+      .black { background: var(--black); }
+
+      .selected {
+        outline: 7px solid var(--sel);
+        outline-offset: 4px;
+      }
+
+      .result-ok {
+        outline: 7px solid var(--ok);
+        outline-offset: 4px;
+      }
+
+      .result-bad {
+        outline: 7px solid var(--bad);
+        outline-offset: 4px;
+      }
+
+      .controls {
+        display: flex;
+        justify-content: center;
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .btn {
+        width: 90px;
+        height: 70px;
+        border-radius: 22px;
+        border: none;
+        font-size: 30px;
+        font-weight: 900;
+        cursor: pointer;
+        box-shadow: var(--shadow);
+      }
+
+      .btn-primary { background: var(--accent); color: #fff; }
+      .btn-check { background: #111827; color: #fff; }
+      .btn-ghost { background: #fff; }
+
+      .btn[disabled] {
+        opacity: 0.3;
+        cursor: not-allowed;
+      }
+
+      .speaker {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+      }
+
+      .speaker.show { opacity: 1; }
+
+      .bubble {
+        width: 120px;
+        height: 120px;
+        border-radius: 32px;
+        background: rgba(255,255,255,0.9);
+        display: grid;
+        place-items: center;
+        box-shadow: var(--shadow);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="card">
+      <div class="topbar">
+        <h1 class="title" id="title">Melodía 1</h1>
+        <div class="score"><small>✓</small><span id="scoreText">0/0</span></div>
+      </div>
+
+      <div class="choices">
+        <div class="note-group" data-index="0">
+          <button class="note white"></button>
+          <button class="note black"></button>
+        </div>
+        <div class="note-group" data-index="1">
+          <button class="note white"></button>
+          <button class="note black"></button>
+        </div>
+        <div class="note-group" data-index="2">
+          <button class="note white"></button>
+          <button class="note black"></button>
+        </div>
+        <div class="note-group" data-index="3">
+          <button class="note white"></button>
+          <button class="note black"></button>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="btn btn-primary" id="listen">▶</button>
+        <button class="btn btn-check" id="check">✓</button>
+        <button class="btn btn-ghost" id="new" disabled>↻</button>
+      </div>
+
+      <div class="speaker" id="speaker">
+        <div class="bubble">🔊</div>
+      </div>
+    </div>
+
+    <script>
+      const NOTE_COUNT = 4;
+      const GAP = 0.08;
+      const START_DELAY = 0.25;
+      const TAIL_PAD = 0.03;
+
+      const AUDIO_FOLDER = "";
+
+      const SAMPLES = {
+        do:  { white: "do_blanca.mp3",  black: "do_negra.mp3" },
+        re:  { white: "re_blanca.mp3",  black: "re_negra.mp3" },
+        mi:  { white: "mi_blanca.mp3",  black: "mi_negra.mp3" },
+        fa:  { white: "fa_blanca.mp3",  black: "fa_negra.mp3" },
+        sol: { white: "sol_blanca.mp3", black: "sol_negra.mp3" },
+        la:  { white: "la_blanca.mp3",  black: "la_negra.mp3" },
+        si:  { white: "si_blanca.mp3",  black: "si_negra.mp3" },
+      };
+
+      function pickPrettyMelodyNames() {
+        const presets = [
+          ["do","re","mi","sol"],
+          ["do","mi","sol","fa"],
+          ["re","mi","fa","sol"],
+          ["mi","re","do","sol"],
+          ["sol","fa","mi","re"],
+        ];
+        return presets[Math.floor(Math.random() * presets.length)];
+      }
+
+      let totalCorrect = 0;
+      let totalAttempts = 0;
+      let melodyIndex = 1;
+      let unlocked = false;
+      let scoredThisMelody = false;
+
+      let currentMelody = pickPrettyMelodyNames();
+      let answer = Array.from({length: NOTE_COUNT}, () => Math.random() < .5 ? "white" : "black");
+      const selections = Array(NOTE_COUNT).fill(null);
+
+      const groups = document.querySelectorAll(".note-group");
+      const listenBtn = document.getElementById("listen");
+      const checkBtn = document.getElementById("check");
+      const newBtn = document.getElementById("new");
+      const speakerEl = document.getElementById("speaker");
+      const scoreText = document.getElementById("scoreText");
+
+      function updateScore() {
+        scoreText.textContent = `${totalCorrect}/${totalAttempts}`;
+      }
+
+      // ==== AUDIO CORE ====
+      let ctx = null;
+      let isPlaying = false;
+      let activeSources = [];
+      let warmedUp = false;
+      const bufferCache = new Map();
+
+      function getAudioContext() {
+        if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (ctx.state === "suspended") ctx.resume();
+        return ctx;
+      }
+
+      async function warmUpAudio() {
+        if (warmedUp) return;
+        const ac = getAudioContext();
+        const buf = ac.createBuffer(1, 1, ac.sampleRate);
+        const src = ac.createBufferSource();
+        const gain = ac.createGain();
+        gain.gain.value = 0;
+        src.buffer = buf;
+        src.connect(gain).connect(ac.destination);
+        const t = ac.currentTime + 0.01;
+        src.start(t);
+        src.stop(t + 0.01);
+        await new Promise(r => setTimeout(r, 60));
+        warmedUp = true;
+      }
+
+      async function loadBuffer(url) {
+        if (bufferCache.has(url)) return bufferCache.get(url);
+        const res = await fetch(url);
+        const arr = await res.arrayBuffer();
+        const buf = await getAudioContext().decodeAudioData(arr);
+        bufferCache.set(url, buf);
+        return buf;
+      }
+
+      function playBufferAt(buffer, time) {
+        const ac = getAudioContext();
+        const src = ac.createBufferSource();
+        const gain = ac.createGain();
+        gain.gain.value = 1;
+        src.buffer = buffer;
+        src.connect(gain).connect(ac.destination);
+        src.start(time);
+        activeSources.push(src);
+        src.onended = () => {
+          activeSources = activeSources.filter(s => s !== src);
+        };
+        return buffer.duration;
+      }
+
+      function stopPlayback() {
+        activeSources.forEach(s => { try { s.stop(); } catch(e){} });
+        activeSources = [];
+        isPlaying = false;
+        speakerEl.classList.remove("show");
+      }
+
+      async function playAnswerMelody() {
+        if (isPlaying || unlocked) return;
+        await warmUpAudio();
+
+        stopPlayback();
+        isPlaying = true;
+        listenBtn.disabled = true;
+        speakerEl.classList.add("show");
+
+        const ac = getAudioContext();
+        let t = ac.currentTime + START_DELAY;
+
+        for (let i = 0; i < NOTE_COUNT; i++) {
+          const buf = await loadBuffer(SAMPLES[currentMelody[i]][answer[i]]);
+          const dur = playBufferAt(buf, t);
+          t += dur + GAP + TAIL_PAD;
+        }
+
+        setTimeout(() => {
+          speakerEl.classList.remove("show");
+          isPlaying = false;
+          if (!unlocked) listenBtn.disabled = false;
+        }, (t - ac.currentTime) * 1000 + 100);
+      }
+
+      groups.forEach((group, i) => {
+        group.querySelectorAll("button").forEach(btn => {
+          btn.addEventListener("click", () => {
+            if (unlocked) return;
+            group.querySelectorAll("button").forEach(b => b.classList.remove("selected"));
+            btn.classList.add("selected");
+            selections[i] = btn.classList.contains("white") ? "white" : "black";
+          });
+        });
+      });
+
+      function checkAnswers() {
+        if (unlocked) return;
+        let ok = 0;
+
+        groups.forEach((group, i) => {
+          if (!selections[i]) return;
+          const correct = selections[i] === answer[i];
+          const btn = group.querySelector("." + selections[i]);
+          btn.classList.remove("selected");
+          btn.classList.add(correct ? "result-ok" : "result-bad");
+          if (correct) ok++;
+        });
+
+        if (!scoredThisMelody) {
+          totalCorrect += ok;
+          totalAttempts += NOTE_COUNT;
+          scoredThisMelody = true;
+          updateScore();
+        }
+
+        if (ok === NOTE_COUNT) {
+          unlocked = true;
+          stopPlayback();
+          listenBtn.disabled = true;
+          checkBtn.disabled = true;
+          newBtn.disabled = false;
+        }
+      }
+
+      function newMelody() {
+        melodyIndex++;
+        document.getElementById("title").textContent = `Melodía ${melodyIndex}`;
+        currentMelody = pickPrettyMelodyNames();
+        answer = Array.from({length: NOTE_COUNT}, () => Math.random() < .5 ? "white" : "black");
+        selections.fill(null);
+        unlocked = false;
+        scoredThisMelody = false;
+        groups.forEach(g => g.querySelectorAll("button").forEach(b => b.className = "note " + (b.classList.contains("white") ? "white" : "black")));
+        listenBtn.disabled = false;
+        checkBtn.disabled = false;
+        newBtn.disabled = true;
+      }
+
+      listenBtn.addEventListener("click", playAnswerMelody);
+      checkBtn.addEventListener("click", checkAnswers);
+      newBtn.addEventListener("click", newMelody);
+    </script>
+  </body>
+</html>
